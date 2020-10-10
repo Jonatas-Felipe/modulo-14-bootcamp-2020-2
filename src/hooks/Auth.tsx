@@ -10,9 +10,16 @@ import AsyncStorage from '@react-native-community/async-storage';
 
 import api from '../services/api';
 
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  avatar_url: string;
+}
+
 interface AuthState {
   token: string;
-  user: object;
+  user: User;
 }
 
 interface SignInCredentials {
@@ -21,9 +28,10 @@ interface SignInCredentials {
 }
 
 interface AuthContextData {
-  user: object;
+  user: User;
   signIn(credentials: SignInCredentials): Promise<void>;
   signOut(): void;
+  updateUser(user: User): Promise<void>;
   loading: boolean;
 }
 
@@ -42,11 +50,11 @@ export const AuthProvider: FC = ({ children }) => {
         '@GoBaber:user',
       ]);
 
-      setData(
-        token[1] && user[1]
-          ? { token: token[1], user: JSON.parse(user[1]) }
-          : ({} as AuthState),
-      );
+      if (token[1] && user[1]) {
+        api.defaults.headers.authorization = `Barear ${token[1]}`;
+
+        setData({ token: token[1], user: JSON.parse(user[1]) });
+      }
 
       setLoading(false);
     }
@@ -62,6 +70,8 @@ export const AuthProvider: FC = ({ children }) => {
 
     const { token, user } = response.data;
 
+    api.defaults.headers.authorization = `Barear ${token}`;
+
     await AsyncStorage.multiSet([
       ['@GoBaber:token', token],
       ['@GoBaber:user', JSON.stringify(user)],
@@ -76,8 +86,22 @@ export const AuthProvider: FC = ({ children }) => {
     setData({} as AuthState);
   }, []);
 
+  const updateUser = useCallback(
+    async (user: User) => {
+      await AsyncStorage.setItem('@GoBaber:user', JSON.stringify(user));
+
+      setData({
+        token: data.token,
+        user,
+      });
+    },
+    [setData, data.token],
+  );
+
   return (
-    <AuthContext.Provider value={{ user: data.user, signIn, signOut, loading }}>
+    <AuthContext.Provider
+      value={{ user: data.user, signIn, signOut, updateUser, loading }}
+    >
       {children}
     </AuthContext.Provider>
   );
